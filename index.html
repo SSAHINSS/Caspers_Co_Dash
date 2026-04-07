@@ -1,0 +1,553 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Caspers Company — Sales Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #1a2744;
+    --navy-dark: #111c33;
+    --navy-light: #243050;
+    --gold: #c8a96e;
+    --gold-light: #dfc08a;
+    --cream: #f5f0e8;
+    --white: #ffffff;
+    --muted: #8a9bb5;
+    --surface: #1e2d4a;
+    --border: rgba(200,169,110,0.15);
+    --green: #4caf82;
+    --red: #e05c5c;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--navy-dark);
+    color: var(--white);
+    min-height: 100vh;
+    display: flex;
+  }
+
+  /* SIDEBAR */
+  .sidebar {
+    width: 240px;
+    min-height: 100vh;
+    background: var(--navy);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    z-index: 100;
+  }
+  .sidebar-logo {
+    padding: 28px 24px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .sidebar-logo img {
+    width: 160px;
+    opacity: 0.95;
+  }
+  .sidebar-label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-top: 8px;
+    font-weight: 500;
+  }
+  .sidebar-section {
+    padding: 20px 16px 8px;
+    font-size: 9px;
+    letter-spacing: 0.18em;
+    color: var(--muted);
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+  .sidebar-nav {
+    flex: 1;
+    padding: 8px 0;
+    overflow-y: auto;
+  }
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 20px;
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+    border-left: 2px solid transparent;
+    transition: all 0.2s;
+    font-weight: 400;
+  }
+  .nav-item:hover { color: var(--white); background: rgba(255,255,255,0.04); }
+  .nav-item.active { color: var(--white); border-left-color: var(--gold); background: rgba(200,169,110,0.08); font-weight: 500; }
+  .nav-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex-shrink: 0; }
+  .nav-item.active .nav-dot { background: var(--gold); }
+  .sidebar-footer {
+    padding: 16px 20px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--muted);
+  }
+  .live-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 10px;
+    color: var(--green);
+    font-weight: 500;
+  }
+  .live-dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+  /* MAIN */
+  .main {
+    margin-left: 240px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+
+  /* TOPBAR */
+  .topbar {
+    padding: 20px 32px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: var(--navy-dark);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .topbar-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--white);
+    letter-spacing: 0.01em;
+  }
+  .topbar-sub {
+    font-size: 12px;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .topbar-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .date-range {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .date-btn {
+    padding: 7px 14px;
+    font-size: 12px;
+    font-family: 'DM Sans', sans-serif;
+    color: var(--muted);
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s;
+    font-weight: 400;
+  }
+  .date-btn:hover { color: var(--white); }
+  .date-btn.active { background: var(--navy-light); color: var(--gold); font-weight: 500; }
+
+  /* CONTENT */
+  .content { padding: 28px 32px; flex: 1; }
+
+  /* KPI CARDS */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px 22px;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .kpi-card:hover { border-color: rgba(200,169,110,0.35); }
+  .kpi-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--gold);
+    opacity: 0.5;
+  }
+  .kpi-label {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    margin-bottom: 10px;
+  }
+  .kpi-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 28px;
+    font-weight: 600;
+    color: var(--white);
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .kpi-change {
+    font-size: 11px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .kpi-change.up { color: var(--green); }
+  .kpi-change.down { color: var(--red); }
+  .kpi-vs { font-size: 10px; color: var(--muted); margin-left: 2px; font-weight: 400; }
+
+  /* CHARTS ROW */
+  .charts-row {
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 22px 24px;
+  }
+  .chart-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .chart-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--white);
+  }
+  .chart-sub {
+    font-size: 11px;
+    color: var(--muted);
+    margin-top: 3px;
+  }
+  .chart-wrap { position: relative; height: 220px; }
+
+  /* LOCATION TABLE */
+  .table-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    margin-bottom: 24px;
+  }
+  .table-header {
+    padding: 18px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .table-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--white);
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    padding: 11px 24px;
+    text-align: left;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+    background: rgba(0,0,0,0.15);
+  }
+  thead th:not(:first-child) { text-align: right; }
+  tbody td {
+    padding: 13px 24px;
+    font-size: 13px;
+    border-bottom: 1px solid rgba(200,169,110,0.06);
+    color: var(--white);
+  }
+  tbody td:not(:first-child) { text-align: right; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,0.025); }
+  .loc-name { font-weight: 500; }
+  .loc-concept { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-size: 10px;
+    font-weight: 500;
+  }
+  .badge-up { background: rgba(76,175,130,0.15); color: var(--green); }
+  .badge-down { background: rgba(224,92,92,0.15); color: var(--red); }
+  .bar-cell { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+  .mini-bar-wrap { width: 80px; height: 5px; background: rgba(255,255,255,0.08); border-radius: 3px; overflow: hidden; }
+  .mini-bar { height: 100%; background: var(--gold); border-radius: 3px; opacity: 0.7; }
+  .note { font-size: 11px; color: var(--muted); padding: 12px 24px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sidebar-logo">
+    <img src="data:image/jpeg;base64,LOGO_PLACEHOLDER" alt="Caspers Company" id="logoImg"/>
+    <div class="sidebar-label">Operations Dashboard</div>
+  </div>
+  <div class="sidebar-nav">
+    <div class="sidebar-section">Restaurants</div>
+    <div class="nav-item active" onclick="filterLocation('all')"><span class="nav-dot"></span>All Locations</div>
+    <div class="nav-item" onclick="filterLocation('Oxford Exchange')"><span class="nav-dot"></span>Oxford Exchange</div>
+    <div class="nav-item" onclick="filterLocation('Predalina')"><span class="nav-dot"></span>Predalina</div>
+    <div class="nav-item" onclick="filterLocation('The Library')"><span class="nav-dot"></span>The Library</div>
+    <div class="nav-item" onclick="filterLocation('Mad Dogs & Englishmen')"><span class="nav-dot"></span>Mad Dogs & Englishmen</div>
+    <div class="nav-item" onclick="filterLocation('Wright\'s TGH')"><span class="nav-dot"></span>Wright's TGH</div>
+    <div class="nav-item" onclick="filterLocation('Wright\'s S. Tampa')"><span class="nav-dot"></span>Wright's S. Tampa</div>
+    <div class="nav-item" onclick="filterLocation('Oxford East')"><span class="nav-dot"></span>Oxford East</div>
+    <div class="nav-item" onclick="filterLocation('Current Hotel')"><span class="nav-dot"></span>Current Hotel</div>
+    <div class="sidebar-section" style="margin-top:8px">Coming Soon</div>
+    <div class="nav-item" style="opacity:0.4;cursor:default"><span class="nav-dot"></span>Other Concepts</div>
+  </div>
+  <div class="sidebar-footer">
+    <div class="live-badge"><span class="live-dot"></span>Sample data — live soon</div>
+    <div style="margin-top:6px">Caspers Co. © 2025</div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main class="main">
+  <div class="topbar">
+    <div>
+      <div class="topbar-title" id="pageTitle">All Restaurants</div>
+      <div class="topbar-sub" id="pageDate">Week of Apr 7, 2025 — Sample Data</div>
+    </div>
+    <div class="topbar-controls">
+      <div class="date-range">
+        <button class="date-btn active" onclick="setRange(this,'today')">Today</button>
+        <button class="date-btn" onclick="setRange(this,'week')">This Week</button>
+        <button class="date-btn" onclick="setRange(this,'month')">This Month</button>
+        <button class="date-btn" onclick="setRange(this,'ytd')">YTD</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="content">
+
+    <!-- KPI CARDS -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">Total Net Sales</div>
+        <div class="kpi-value" id="kpiSales">$124,830</div>
+        <div class="kpi-change up">↑ 8.4% <span class="kpi-vs">vs last week</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Total Covers</div>
+        <div class="kpi-value" id="kpiCovers">3,241</div>
+        <div class="kpi-change up">↑ 5.1% <span class="kpi-vs">vs last week</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Avg Check</div>
+        <div class="kpi-value" id="kpiCheck">$38.52</div>
+        <div class="kpi-change up">↑ 3.1% <span class="kpi-vs">vs last week</span></div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Best Performer</div>
+        <div class="kpi-value" style="font-size:17px;padding-top:4px">Oxford Exchange</div>
+        <div class="kpi-change up">↑ 14.2% <span class="kpi-vs">vs last week</span></div>
+      </div>
+    </div>
+
+    <!-- CHARTS -->
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Sales Trend</div>
+            <div class="chart-sub">Last 30 days · all locations</div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="trendChart"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <div class="chart-header">
+          <div>
+            <div class="chart-title">Sales by Location</div>
+            <div class="chart-sub">This week</div>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="locationChart"></canvas></div>
+      </div>
+    </div>
+
+    <!-- TABLE -->
+    <div class="table-card">
+      <div class="table-header">
+        <div class="table-title">Location Breakdown</div>
+        <div style="font-size:11px;color:var(--muted)">Sample data · Live Toast connection coming soon</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Location</th>
+            <th>Net Sales</th>
+            <th>Covers</th>
+            <th>Avg Check</th>
+            <th>vs Last Week</th>
+            <th>Volume</th>
+          </tr>
+        </thead>
+        <tbody id="locationTable"></tbody>
+      </table>
+      <div class="note">* All figures are sample/demo data. Live API connections to Toast, Sage Intacct, and Northstar coming in next build phase.</div>
+    </div>
+
+  </div>
+</main>
+
+<script>
+// --- LOGO ---
+// We embed the actual logo below
+document.getElementById('logoImg').src = 'caspers_primarylogo_white.png';
+
+// --- SAMPLE DATA ---
+const locations = [
+  { name: "Oxford Exchange",       sales: 28400, covers: 712, check: 39.89, vsLast:  14.2 },
+  { name: "Predalina",             sales: 21300, covers: 489, check: 43.56, vsLast:   6.8 },
+  { name: "The Library",           sales: 18900, covers: 541, check: 34.94, vsLast:  -2.1 },
+  { name: "Mad Dogs & Englishmen", sales: 14200, covers: 498, check: 28.51, vsLast:   9.3 },
+  { name: "Wright's TGH",          sales: 13800, covers: 387, check: 35.66, vsLast:   4.5 },
+  { name: "Wright's S. Tampa",     sales: 12600, covers: 341, check: 36.95, vsLast:  11.7 },
+  { name: "Oxford East",           sales: 10200, covers: 198, check: 51.52, vsLast:   1.2 },
+  { name: "Current Hotel",         sales:  5430, covers:  75, check: 72.40, vsLast:  -5.8 },
+];
+
+const maxSales = Math.max(...locations.map(l => l.sales));
+
+function buildTable() {
+  const tbody = document.getElementById('locationTable');
+  tbody.innerHTML = locations.map(l => {
+    const pct = (l.sales / maxSales * 100).toFixed(0);
+    const up = l.vsLast >= 0;
+    return `<tr>
+      <td><div class="loc-name">${l.name}</div></td>
+      <td>$${l.sales.toLocaleString()}</td>
+      <td>${l.covers.toLocaleString()}</td>
+      <td>$${l.check.toFixed(2)}</td>
+      <td><span class="badge ${up?'badge-up':'badge-down'}">${up?'↑':'↓'} ${Math.abs(l.vsLast)}%</span></td>
+      <td><div class="bar-cell"><div class="mini-bar-wrap"><div class="mini-bar" style="width:${pct}%"></div></div></div></td>
+    </tr>`;
+  }).join('');
+}
+buildTable();
+
+// --- TREND CHART ---
+const days = Array.from({length:30},(_,i)=>{
+  const d = new Date(); d.setDate(d.getDate()-29+i);
+  return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+});
+const trend = days.map((_,i) => Math.round(15000 + Math.sin(i*0.5)*3000 + Math.random()*4000 + i*180));
+
+const tCtx = document.getElementById('trendChart').getContext('2d');
+new Chart(tCtx, {
+  type: 'line',
+  data: {
+    labels: days,
+    datasets: [{
+      label: 'Net Sales',
+      data: trend,
+      borderColor: '#c8a96e',
+      backgroundColor: 'rgba(200,169,110,0.08)',
+      fill: true,
+      tension: 0.4,
+      pointRadius: 0,
+      pointHoverRadius: 4,
+      borderWidth: 2,
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: {
+      callbacks: { label: ctx => ' $' + ctx.raw.toLocaleString() },
+      backgroundColor: '#1a2744', borderColor: '#c8a96e', borderWidth: 1,
+      titleColor: '#c8a96e', bodyColor: '#e8e4dc',
+    }},
+    scales: {
+      x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8a9bb5', font:{size:10}, maxTicksLimit:6 }, border:{display:false} },
+      y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: '#8a9bb5', font:{size:10}, callback: v => '$'+Math.round(v/1000)+'k' }, border:{display:false} }
+    }
+  }
+});
+
+// --- LOCATION BAR CHART ---
+const lCtx = document.getElementById('locationChart').getContext('2d');
+new Chart(lCtx, {
+  type: 'bar',
+  data: {
+    labels: locations.map(l => l.name.length > 14 ? l.name.slice(0,13)+'…' : l.name),
+    datasets: [{
+      data: locations.map(l => l.sales),
+      backgroundColor: locations.map((_,i) => i===0 ? 'rgba(200,169,110,0.85)' : 'rgba(200,169,110,0.25)'),
+      borderRadius: 4,
+      borderWidth: 0,
+    }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false }, tooltip: {
+      callbacks: { label: ctx => ' $' + ctx.raw.toLocaleString() },
+      backgroundColor: '#1a2744', borderColor: '#c8a96e', borderWidth: 1,
+      titleColor: '#c8a96e', bodyColor: '#e8e4dc',
+    }},
+    scales: {
+      x: { grid:{color:'rgba(255,255,255,0.04)'}, ticks:{color:'#8a9bb5',font:{size:10}, callback:v=>'$'+v/1000+'k'}, border:{display:false} },
+      y: { grid:{display:false}, ticks:{color:'#8a9bb5',font:{size:10}}, border:{display:false} }
+    }
+  }
+});
+
+// --- NAV / FILTER ---
+function filterLocation(loc) {
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.getElementById('pageTitle').textContent = loc === 'all' ? 'All Restaurants' : loc;
+}
+
+// --- DATE RANGE ---
+function setRange(btn, range) {
+  document.querySelectorAll('.date-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+</script>
+</body>
+</html>
