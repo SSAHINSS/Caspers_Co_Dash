@@ -14,6 +14,7 @@
 [data-theme="predalina"]{--accent:#c4485a;--accent-dim:rgba(196,72,90,.11);--accent-border:rgba(196,72,90,.28);--sidebar-bg:#7b1d2a;}
 [data-theme="the-library"]{--accent:#4e6b82;--accent-dim:rgba(78,107,130,.11);--accent-border:rgba(78,107,130,.28);--sidebar-bg:#253444;}
 [data-theme="mad-dogs"]{--accent:#b8972e;--accent-dim:rgba(184,151,46,.11);--accent-border:rgba(184,151,46,.28);--sidebar-bg:#2c2a25;}
+[data-theme="wrights"]{--accent:#006b52;--accent-dim:rgba(0,107,82,.11);--accent-border:rgba(0,107,82,.28);--sidebar-bg:#0d3328;}
 [data-theme="oxford-east"]{--accent:#737373;--accent-dim:rgba(115,115,115,.10);--accent-border:rgba(115,115,115,.22);--sidebar-bg:#2a2a2a;}
 [data-theme="current-hotel"]{--accent:#4a90b8;--accent-dim:rgba(74,144,184,.11);--accent-border:rgba(74,144,184,.28);--sidebar-bg:#192535;}
 [data-theme="csc"]{--accent:#e8513a;--accent-dim:rgba(232,81,58,.11);--accent-border:rgba(232,81,58,.28);--sidebar-bg:#2b1a17;}
@@ -125,6 +126,7 @@ tbody tr:hover{background:var(--surf2);}
     <div class="nav-item" data-loc="Predalina" data-theme="predalina" data-logo="PREDALINA" onclick="navClick(this)"><span class="nav-check"><span class="ck-tick">&#10003;</span></span>Predalina</div>
     <div class="nav-item" data-loc="The Library" data-theme="the-library" data-logo="LIBRARY" onclick="navClick(this)"><span class="nav-check"><span class="ck-tick">&#10003;</span></span>The Library</div>
     <div class="nav-item" data-loc="Mad Dogs &amp; Englishmen" data-theme="mad-dogs" data-logo="MADDOGS" onclick="navClick(this)"><span class="nav-check"><span class="ck-tick">&#10003;</span></span>Mad Dogs &amp; Englishmen</div>
+    <div class="nav-item" data-loc="Wright's S. Tampa" data-theme="wrights" data-logo="WRIGHTS" onclick="navClick(this)"><span class="nav-check"><span class="ck-tick">&#10003;</span></span>Wright's S. Tampa</div>
     <div class="nav-item" data-loc="Oxford East" data-theme="oxford-east" data-logo="OE" onclick="navClick(this)"><span class="nav-check"><span class="ck-tick">&#10003;</span></span>Oxford East</div>
     <div class="nav-item" data-loc="Current Hotel" data-theme="current-hotel" data-logo="LOGOMARK" onclick="navClick(this)"><span class="nav-check"><span class="ck-tick">&#10003;</span></span>Current Hotel</div>
     <div class="sb-grp">Hospitality</div>
@@ -257,7 +259,22 @@ var LOGO_OXCOMMONS="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAlgAAAB9CAYAAA
 
 var LOGOS={CASPERS:LOGO_CASPERS,OE:LOGO_OE,PREDALINA:LOGO_PREDALINA,LIBRARY:LOGO_LIBRARY,MADDOGS:LOGO_MADDOGS,WRIGHTS:LOGO_WRIGHTS,CSC:LOGO_CSC,STOVALL:LOGO_STOVALL,RIVERSIDE:LOGO_RIVERSIDE,OXDESIGN:LOGO_OXDESIGN,OXCOMMONS:LOGO_OXCOMMONS,LOGOMARK:LOGO_LOGOMARK};
 var LMAX={CASPERS:'46px',OE:'24px',PREDALINA:'42px',LIBRARY:'46px',MADDOGS:'44px',WRIGHTS:'44px',CSC:'46px',STOVALL:'24px',RIVERSIDE:'40px',OXDESIGN:'32px',OXCOMMONS:'44px',LOGOMARK:'46px'};
-var COLORS=['#c8a96e','#4e6b82','#c4485a','#b8972e','#1b6b4a','#e8513a','#4a90b8','#737373'];
+var BRAND_COLORS={
+  'Oxford Exchange':'#6b7280',
+  'Predalina':'#c4485a',
+  'The Library':'#4e6b82',
+  "Wright's S. Tampa":'#006b52',
+  'Mad Dogs & Englishmen':'#b8972e',
+  'Oxford East':'#737373',
+  'Current Hotel':'#4a90b8',
+  'Riverside Recovery':'#5b7fa0',
+  'Stovall House':'#7a6b35',
+  'Oxford Commons':'#b8975a',
+  'Oxford Design':'#6b7245',
+  'CSC':'#e8513a'
+};
+var FALLBACK_COLORS=['#c8a96e','#4e6b82','#c4485a','#b8972e','#006b52','#e8513a','#4a90b8','#737373'];
+function locColor(name,idx){return BRAND_COLORS[name]||FALLBACK_COLORS[idx%FALLBACK_COLORS.length];}
 
 var API='https://casperscodash-production.up.railway.app';
 var selectedLocs=[], currentRange='week', currentMetric='sales', activeCard='sales';
@@ -458,7 +475,7 @@ function buildTrendChart(json){
     datasets=[{data:vals,borderColor:c,backgroundColor:c+'18',fill:true,tension:.4,pointRadius:0,pointHoverRadius:4,borderWidth:2,label:locs[0]||'All'}];
   } else {
     datasets=locs.map(function(loc,i){
-      return {data:data.map(function(r){return r[loc]||0;}),borderColor:COLORS[i%COLORS.length],backgroundColor:'transparent',tension:.4,pointRadius:0,pointHoverRadius:4,borderWidth:2,label:loc};
+      return {data:data.map(function(r){return r[loc]||0;}),borderColor:locColor(loc,i),backgroundColor:'transparent',tension:.4,pointRadius:0,pointHoverRadius:4,borderWidth:2,label:loc};
     });
   }
   TC=new Chart(document.getElementById('tChart'),{
@@ -481,7 +498,7 @@ function buildLocChart(rows){
   var labels=rows.map(function(r){return r.location.length>14?r.location.slice(0,13)+'...':r.location;});
   LC=new Chart(document.getElementById('lChart'),{
     type:'bar',
-    data:{labels:labels,datasets:[{data:rows.map(function(row){return row.sales||0;}),backgroundColor:rows.map(function(row,i){return COLORS[i%COLORS.length];}),borderRadius:4,borderWidth:0}]},
+    data:{labels:labels,datasets:[{data:rows.map(function(row){return row.sales||0;}),backgroundColor:rows.map(function(row,i){return locColor(row.location,i);}),borderRadius:4,borderWidth:0}]},
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{backgroundColor:'#fff',borderColor:'#e0e4ea',borderWidth:1,titleColor:'#141f35',bodyColor:'#4a5568',padding:10,callbacks:{label:function(c){return ' '+fmtS(c.raw);}}}},
       scales:{x:{grid:{color:'rgba(0,0,0,.04)'},ticks:{color:'#8a97aa',font:{size:10},callback:function(v){return '$'+Math.round(v/1000)+'k';}},border:{display:false}},y:{grid:{display:false},ticks:{color:'#8a97aa',font:{size:10}},border:{display:false}}}
