@@ -317,71 +317,68 @@ def upsert_day(conn, location_name, business_date, net_sales, orders, guests):
     conn.commit()
     cur.close()
 
-@app.get("/sync/toast")
-def sync_toast(days: int = 3):
-    """
-    Pull last N days of Toast data for all locations.
-    Call this endpoint manually or schedule it via Railway cron.
-    Default: last 3 days (catches yesterday + any gaps).
-    """
-    if not CLIENT_ID or not CLIENT_SECRET:
-        return {"error": "TOAST_CLIENT_ID and TOAST_CLIENT_SECRET not set in Railway variables"}
+import threading, json as _json
+_sync_status = {"running": False, "last_result": None, "last_run": None}
 
+def _run_sync_background(days):
+    global _sync_status
+    import time
+    _sync_status["running"] = True
     results = []
     try:
         token = get_token()
-    except Exception as e:
-        return {"error": f"Toast auth failed: {str(e)}"}
+        conn = psycopg2.connect(DATABASE_URL)
+        yesterday = date.today() - timedelta(days=1)
+        locations_to_sync = os.environ.get("TOAST_LOCATION_GUIDS", "")
+        loc_pairs = []
+        for pair in locations_to_sync.split(","):
+            pair = pair.strip()
+            if ":" in pair:
+                guid, name = pair.split(":", 1)
+                loc_pairs.append((guid.strip(), name.strip()))
 
-    conn = psycopg2.connect(DATABASE_URL)
-    yesterday = date.today() - timedelta(days=1)
-
-    # Locations to sync — name must match what's in daily_sales table
-    # Format: (toast_restaurant_guid, dashboard_location_name)
-    # First run: we'll try to discover GUIDs automatically
-    locations_to_sync = os.environ.get("TOAST_LOCATION_GUIDS", "")
-
-    if not locations_to_sync:
+        for guid, name in loc_pairs:
+            loc_results = []
+            for i in range(days):
+                bdate = yesterday - timedelta(days=i)
+                try:
+                    orders = get_orders_for_day(token, guid, bdate)
+                    net_sales, total_orders, total_guests = aggregate_orders(orders)
+                    upsert_day(conn, name, bdate, net_sales, total_orders, total_guests)
+                    loc_results.append({"date": str(bdate), "net_sales": net_sales, "orders": total_orders, "guests": total_guests, "status": "ok"})
+                except Exception as e:
+                    loc_results.append({"date": str(bdate), "error": str(e)})
+                time.sleep(0.5)
+            results.append({"location": name, "days_ok": sum(1 for d in loc_results if "net_sales" in d), "days_err": sum(1 for d in loc_results if "error" in d)})
         conn.close()
-        return {
-            "status": "setup_required",
-            "message": "Add TOAST_LOCATION_GUIDS to Railway variables.",
-            "format": "GUID1:Location Name,GUID2:Location Name",
-            "example": "abc-123:Oxford Exchange,def-456:Predalina",
-            "next_step": "Visit /toast/locations to discover your GUIDs"
-        }
+        _sync_status["last_result"] = {"status": "ok", "synced": results}
+    except Exception as e:
+        _sync_status["last_result"] = {"status": "error", "error": str(e)}
+    finally:
+        _sync_status["running"] = False
+        _sync_status["last_run"] = str(date.today())
 
-    # Parse GUID:Name pairs
-    loc_pairs = []
-    for pair in locations_to_sync.split(","):
-        pair = pair.strip()
-        if ":" in pair:
-            guid, name = pair.split(":", 1)
-            loc_pairs.append((guid.strip(), name.strip()))
+@app.get("/sync/toast")
+def sync_toast(days: int = 3):
+    """Start Toast sync in background. Check /sync/status for results."""
+    if not CLIENT_ID or not CLIENT_SECRET:
+        return {"error": "TOAST_CLIENT_ID and TOAST_CLIENT_SECRET not set"}
+    if not os.environ.get("TOAST_LOCATION_GUIDS"):
+        return {"error": "TOAST_LOCATION_GUIDS not set"}
+    if _sync_status["running"]:
+        return {"status": "already_running", "message": "Sync already in progress. Check /sync/status"}
+    t = threading.Thread(target=_run_sync_background, args=(days,), daemon=True)
+    t.start()
+    return {"status": "started", "days": days, "message": f"Syncing {days} days in background. Check /sync/status for progress."}
 
-    for guid, name in loc_pairs:
-        loc_results = []
-        import time
-        for i in range(days):
-            bdate = yesterday - timedelta(days=i)
-            try:
-                orders = get_orders_for_day(token, guid, bdate)
-                net_sales, total_orders, total_guests = aggregate_orders(orders)
-                upsert_day(conn, name, bdate, net_sales, total_orders, total_guests)
-                loc_results.append({
-                    "date": str(bdate),
-                    "net_sales": net_sales,
-                    "orders": total_orders,
-                    "guests": total_guests
-                })
-            except Exception as e:
-                loc_results.append({"date": str(bdate), "error": str(e)})
-            time.sleep(0.5)  # rate limit buffer between days
-
-        results.append({"location": name, "guid": guid, "days": loc_results})
-
-    conn.close()
-    return {"status": "ok", "synced": results}
+@app.get("/sync/status")
+def sync_status():
+    """Check status of background Toast sync."""
+    return {
+        "running": _sync_status["running"],
+        "last_run": _sync_status["last_run"],
+        "last_result": _sync_status["last_result"]
+    }
 
 @app.get("/toast/locations")
 def discover_locations():
