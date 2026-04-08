@@ -95,9 +95,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);color:var(--txt)
 .tc-title{font-family:'Playfair Display',serif;font-size:14px;font-weight:600;color:var(--txt);}
 .tc-note{font-size:11px;color:var(--muted);}
 table{width:100%;border-collapse:collapse;}
-thead th{padding:9px 16px;text-align:left;font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);font-weight:500;border-bottom:1px solid var(--bdr);background:var(--surf2);white-space:nowrap;}
+thead th{padding:8px 12px;text-align:left;font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:500;border-bottom:1px solid var(--bdr);background:var(--surf2);white-space:nowrap;}
 thead th.r{text-align:right;}
-tbody td{padding:11px 16px;font-size:13px;border-bottom:1px solid var(--bdr);color:var(--txt);}
+tbody td{padding:9px 12px;font-size:12.5px;border-bottom:1px solid var(--bdr);color:var(--txt);}
 tbody td.r{text-align:right;}
 tbody tr:last-child td{border-bottom:none;}
 tbody tr:hover{background:var(--surf2);}
@@ -225,10 +225,9 @@ tbody tr:hover{background:var(--surf2);}
         <table>
           <thead><tr>
             <th>Location</th>
-            <th class="r" id="thCur">Net Sales</th>
-            <th class="r" id="thPrv">Prior Period</th>
-            <th class="r">$ Variance</th>
-            <th class="r">% Change</th>
+            <th class="r" id="thCur" style="min-width:110px">Current</th>
+            <th class="r" id="thPrv" style="min-width:110px">Prior</th>
+            <th class="r">Variance</th>
             <th class="r">Covers</th>
             <th class="r">Avg Check</th>
             <th class="r">YTD</th>
@@ -281,8 +280,14 @@ function navClick(el){
   else{selectedLocs.push(loc);el.classList.add('selected');}
   document.querySelector('[data-loc="all"]').classList.toggle('active',selectedLocs.length===0);
   document.getElementById('clrBtn').classList.toggle('on',selectedLocs.length>0);
-  if(selectedLocs.length===1)applyTheme(el.dataset.theme,el.dataset.logo);
-  else applyTheme('','CASPERS');
+  if(selectedLocs.length===1){
+    // Find the nav item for the REMAINING selected location (not el)
+    var remEl=document.querySelector('.nav-item[data-loc="'+selectedLocs[0].replace(/&/g,'&amp;')+'"]');
+    if(remEl)applyTheme(remEl.dataset.theme,remEl.dataset.logo);
+    else applyTheme(el.dataset.theme,el.dataset.logo);
+  } else {
+    applyTheme('','CASPERS');
+  }
   updateTitle(); refresh();
 }
 
@@ -387,9 +392,10 @@ async function refresh(){
       liveData=raw.data||[];
       labelCur=raw.label_cur||'Current'; labelPrev=raw.label_prev||'Prior';
     }
-    document.getElementById('thCur').textContent='Net Sales — '+labelCur;
-    document.getElementById('thPrv').textContent='Net Sales — '+labelPrev;
+    document.getElementById('thCur').textContent=labelCur;
+    document.getElementById('thPrv').textContent=labelPrev;
     document.getElementById('pgSub').textContent=labelCur+' vs '+labelPrev+' · Live';
+    // Short period in KPI change line handled by updateKPIs
     document.getElementById('locSub').textContent=labelCur;
     document.getElementById('tSub').textContent=labelCur+' vs '+labelPrev;
     document.getElementById('tableNote').textContent=(selectedLocs.length?selectedLocs.join(', '):'All locations')+' · '+labelCur;
@@ -431,7 +437,8 @@ function updateKPIs(rows){
   document.getElementById('kCheck').textContent=fmtCheck(avgChk);
   document.getElementById('kYTD').textContent=fmtLarge(ty);
   var up=chgPct>=0;
-  document.getElementById('kSalesC').innerHTML='<span class="'+(up?'up':'dn')+'">'+(up?'&#8593;':'&#8595;')+' '+Math.abs(chgPct).toFixed(1)+'% ('+fmtSigned(chgAbs)+')</span><span class="kpi-vs" style="margin-left:4px">vs '+labelPrev+'</span>';
+  var shortPrev=labelPrev.length>15?labelPrev.slice(0,14)+'...':labelPrev;
+  document.getElementById('kSalesC').innerHTML='<span class="'+(up?'up':'dn')+'">'+(up?'&#8593;':'&#8595;')+' '+Math.abs(chgPct).toFixed(1)+'% ('+fmtSigned(chgAbs)+')</span><span class="kpi-vs" style="margin-left:4px">vs '+shortPrev+'</span>';
   document.getElementById('kCoversC').innerHTML='<span class="kpi-vs">'+to_.toLocaleString()+' orders &bull; '+tc.toLocaleString()+' covers</span>';
   document.getElementById('kCheckC').innerHTML='<span class="kpi-vs">'+to_.toLocaleString()+' total orders</span>';
   document.getElementById('kYTDsub').textContent='Jan 1 – today';
@@ -493,8 +500,7 @@ function buildTable(rows){
       +'<td><div class="lname">'+row.location+'</div></td>'
       +'<td class="r">'+fmtS(row.sales||0)+'</td>'
       +'<td class="r">'+fmtS(row.prev||0)+'</td>'
-      +'<td class="r"><span style="color:var(--'+(up?'green':'red')+')">'+(up?'+':'')+fmtS(varAbs)+'</span></td>'
-      +'<td class="r"><span class="badge '+(up?'bup':'bdn')+'">'+(up?'&#8593;':'&#8595;')+' '+Math.abs(row.chg_pct||0)+'%</span></td>'
+      +'<td class="r"><span style="color:var(--'+(up?'green':'red')+')">'+(up?'+':'')+fmtS(varAbs)+'</span><br><span class="badge '+(up?'bup':'bdn')+'" style="margin-top:3px;display:inline-block">'+(up?'&#8593;':'&#8595;')+' '+Math.abs(row.chg_pct||0)+'%</span></td>'
       +'<td class="r">'+(row.guests>0?row.guests.toLocaleString():'&mdash;')+'</td>'
       +'<td class="r">'+(row.avg_check>0?fmtCheck(row.avg_check):'&mdash;')+'</td>'
       +'<td class="r">'+fmtS(row.ytd||0)+'</td>'
