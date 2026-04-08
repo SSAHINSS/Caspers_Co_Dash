@@ -394,3 +394,20 @@ def discover_locations():
         return {"status": resp.status_code, "body": resp.text[:500]}
     except Exception as e:
         return {"error": str(e)}
+
+@app.get("/toast/debug")
+def toast_debug():
+    """Show what credentials Railway has (safe - only shows length and first/last chars)."""
+    cid = os.environ.get("TOAST_CLIENT_ID", "NOT SET")
+    sec = os.environ.get("TOAST_CLIENT_SECRET", "NOT SET")
+    return {
+        "client_id": cid,
+        "client_id_length": len(cid),
+        "secret_length": len(sec),
+        "secret_first3": sec[:3] if len(sec) > 3 else sec,
+        "secret_last3": sec[-3:] if len(sec) > 3 else sec,
+        "secret_has_spaces": " " in sec,
+        "secret_has_newline": "\n" in sec or "\r" in sec,
+        "secret_repr_first10": repr(sec[:10])
+    }
+
