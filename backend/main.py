@@ -240,27 +240,43 @@ def get_restaurants(token):
     return resp.json()
 
 def get_orders_for_day(token, restaurant_guid, business_date):
-    """
-    Pull all orders for a specific business date at one location.
-    Uses businessDate param (YYYYMMDD format).
-    """
+    """Pull all orders for a business date using standard orders API with pagination."""
+    import time
     date_str = business_date.strftime("%Y%m%d")
-    resp = requests.get(
-        f"{TOAST_HOST}/orders/v2/ordersBulk",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Toast-Restaurant-External-ID": restaurant_guid
-        },
-        params={
-            "businessDate": date_str,
-            "pageSize": 500
-        },
-        timeout=30
-    )
-    if resp.status_code == 204:
-        return []  # no orders that day
-    resp.raise_for_status()
-    return resp.json()
+    all_orders = []
+    page = 1
+    page_size = 100
+
+    while True:
+        resp = requests.get(
+            f"{TOAST_HOST}/orders/v2/orders",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Toast-Restaurant-External-ID": restaurant_guid
+            },
+            params={
+                "businessDate": date_str,
+                "pageSize": page_size,
+                "page": page
+            },
+            timeout=30
+        )
+        if resp.status_code == 204:
+            break  # no orders
+        if resp.status_code == 429:
+            time.sleep(2)  # back off on rate limit
+            continue
+        resp.raise_for_status()
+        data = resp.json()
+        if not data:
+            break
+        all_orders.extend(data if isinstance(data, list) else [data])
+        if len(data) < page_size:
+            break  # last page
+        page += 1
+        time.sleep(0.3)  # be polite to the API
+
+    return all_orders
 
 def aggregate_orders(orders):
     """Aggregate raw Toast orders into net_sales, covers, orders."""
@@ -345,6 +361,7 @@ def sync_toast(days: int = 3):
 
     for guid, name in loc_pairs:
         loc_results = []
+        import time
         for i in range(days):
             bdate = yesterday - timedelta(days=i)
             try:
@@ -359,6 +376,7 @@ def sync_toast(days: int = 3):
                 })
             except Exception as e:
                 loc_results.append({"date": str(bdate), "error": str(e)})
+            time.sleep(0.5)  # rate limit buffer between days
 
         results.append({"location": name, "guid": guid, "days": loc_results})
 
