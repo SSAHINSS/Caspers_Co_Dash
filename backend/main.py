@@ -11,7 +11,7 @@ def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
 def compute_ranges(range_name, start_date=None, end_date=None):
-    today = date.today()
+    today = date.today() - timedelta(days=1)  # always cap to yesterday
     if range_name == "custom" and start_date and end_date:
         s = datetime.strptime(start_date, "%Y-%m-%d").date()
         e = datetime.strptime(end_date, "%Y-%m-%d").date()

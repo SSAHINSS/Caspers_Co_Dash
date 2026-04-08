@@ -242,12 +242,13 @@ tbody tr:hover{background:var(--surf2);}
         <table>
           <thead><tr>
             <th id="thLabel" style="min-width:160px">Location</th>
-            <th class="r" id="hCur" style="min-width:120px">Current</th>
-            <th class="r" id="hPrev" style="min-width:120px">Prior</th>
+            <th class="r" id="hCur" style="min-width:130px">Current Period</th>
+            <th class="r" id="hPrev" style="min-width:130px">Prior Period</th>
             <th class="r" style="min-width:120px">Variance</th>
-            <th class="r" style="min-width:90px">Net Sales</th>
-            <th class="r" style="min-width:70px">Covers</th>
-            <th class="r" style="min-width:80px">Avg Check</th>
+            <th class="r" style="min-width:90px" id="hCovers">Covers</th>
+            <th class="r" id="hCoversP" style="min-width:90px">vs Prior</th>
+            <th class="r" style="min-width:80px" id="hAvg">Avg Check</th>
+            <th class="r" id="hAvgP" style="min-width:80px">vs Prior</th>
             <th class="r" style="min-width:80px">YTD</th>
           </tr></thead>
           <tbody id="tbody"></tbody>
@@ -293,7 +294,7 @@ function locColor(name,i){return BRAND_COLORS[name]||FB[i%FB.length];}
 var LOGOS={CASPERS:LOGO_CASPERS,OE:LOGO_OE,PREDALINA:LOGO_PREDALINA,LIBRARY:LOGO_LIBRARY,MADDOGS:LOGO_MADDOGS,WRIGHTS:LOGO_WRIGHTS,CSC:LOGO_CSC,STOVALL:LOGO_STOVALL,RIVERSIDE:LOGO_RIVERSIDE,OXDESIGN:LOGO_OXDESIGN,OXCOMMONS:LOGO_OXCOMMONS,LOGOMARK:LOGO_LOGOMARK};
 var LMAX={CASPERS:'46px',OE:'24px',PREDALINA:'42px',LIBRARY:'46px',MADDOGS:'44px',WRIGHTS:'44px',CSC:'46px',STOVALL:'24px',RIVERSIDE:'40px',OXDESIGN:'32px',OXCOMMONS:'44px',LOGOMARK:'46px'};
 
-var API= + API + r;
+var API='https://casperscodash-production.up.railway.app';
 var selectedLocs=[], currentRange='week', currentMetric='sales', activeCard='sales';
 var customStart='', customEnd='';
 var TC, LC, liveData=[], labelCur='', labelPrev='';
@@ -311,7 +312,7 @@ function accent(){return getComputedStyle(document.getElementById('app')).getPro
 function navClick(el){
   var loc=el.dataset.loc;
   if(loc==='all'){clearSel();return;}
-  var idx=selectedLocs.indexOf(loc);
+  var idx=selectedLocs.indexOf(loc); // loc comes from dataset directly
   if(idx>=0){selectedLocs.splice(idx,1);el.classList.remove('selected');}
   else{selectedLocs.push(loc);el.classList.add('selected');}
   document.querySelector('[data-loc="all"]').classList.toggle('active',selectedLocs.length===0);
@@ -530,6 +531,20 @@ function buildLocChart(rows){
   });
 }
 
+function coversCells(r){
+  var cur=r.cur_guests||0, prev=r.prev_guests||0;
+  var chg=prev?((cur-prev)/prev*100):0; var up=cur>=prev;
+  return '<td class="r" style="font-weight:500">'+fmtN(cur)+'</td>'
+    +'<td class="r"><span class="'+(up?'up':'dn')+'">'+(up?'&#8593;':'&#8595;')+' '+Math.abs(chg).toFixed(1)+'%</span>'
+    +'<div style="font-size:10px;color:var(--muted)">'+(up?'+':'')+fmtN(cur-prev)+' vs '+fmtN(prev)+'</div></td>';
+}
+function avgCells(r){
+  var cur=r.cur_avg||0, prev=r.prev_avg||0;
+  var chg=prev?((cur-prev)/prev*100):0; var up=cur>=prev;
+  return '<td class="r" style="font-weight:500">'+fmtCheck(cur)+'</td>'
+    +'<td class="r"><span class="'+(up?'up':'dn')+'">'+(up?'&#8593;':'&#8595;')+' '+Math.abs(chg).toFixed(1)+'%</span>'
+    +'<div style="font-size:10px;color:var(--muted)">'+(up?'+':'-')+'$'+Math.abs(cur-prev).toFixed(2)+' vs '+fmtCheck(prev)+'</div></td>';
+}
 function buildTable(rows){
   if(!rows||!rows.length){document.getElementById('tbody').innerHTML='<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--muted)">No data for selected period</td></tr>';return;}
   var isPct = tableMode==='pct';
@@ -592,9 +607,8 @@ function buildTable(rows){
     +'<td class="r" style="font-weight:600">'+tv.fmt_cur+'</td>'
     +'<td class="r" style="color:var(--muted)">'+tv.fmt_prev+'</td>'
     +'<td class="r">'+tv.varCell+'</td>'
-    +'<td class="r" style="font-weight:500">'+fmtS(tot.cur_sales)+'</td>'
-    +'<td class="r" style="color:var(--muted)">'+fmtN(tot.cur_guests)+'</td>'
-    +'<td class="r">'+fmtCheck(tot.cur_avg)+'</td>'
+    +coversCells(tot)
+    +avgCells(tot)
     +'<td class="r" style="color:var(--muted)">'+fmtLarge(tot.ytd)+'</td>'
     +'</tr>';
 
