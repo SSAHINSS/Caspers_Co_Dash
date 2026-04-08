@@ -201,8 +201,10 @@ LOCATION_MAP = {}  # guid -> name — filled dynamically
 
 def get_token():
     """Get OAuth bearer token from Toast."""
+    # Restaurant management group client auth
     resp = requests.post(
         f"{TOAST_HOST}/authentication/v1/authentication/login",
+        headers={"Content-Type": "application/json"},
         json={
             "clientId":     CLIENT_ID,
             "clientSecret": CLIENT_SECRET,
@@ -210,9 +212,16 @@ def get_token():
         },
         timeout=15
     )
-    resp.raise_for_status()
+    if not resp.ok:
+        raise Exception(f"{resp.status_code}: {resp.text[:200]}")
     data = resp.json()
-    return data["token"]["accessToken"]
+    # Handle both response formats
+    if "token" in data:
+        return data["token"]["accessToken"]
+    elif "accessToken" in data:
+        return data["accessToken"]
+    else:
+        raise Exception(f"Unexpected auth response: {str(data)[:200]}")
 
 def get_restaurants(token):
     """Get all restaurant GUIDs and names accessible to this credential."""
