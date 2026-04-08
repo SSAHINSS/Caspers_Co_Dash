@@ -373,16 +373,14 @@ function buildURL(endpoint){
 async function refresh(){
   document.getElementById('tSpin').classList.add('on');
   try{
-    var r=await fetch(buildURL('summary'));
-    var raw=await r.json();
-    // Handle both old flat array and new object format
+    var resp=await fetch(buildURL('summary'));
+    var raw=await resp.json();
     if(Array.isArray(raw)){
       liveData=raw;
-      // Map old field names to new
-      liveData.forEach(function(r){
-        if(r.sales===undefined&&r.sales_7!==undefined){r.sales=r.sales_7;r.prev=r.prev_7||0;r.chg_pct=r.chg||0;r.chg_abs=r.sales-(r.prev||0);r.guests=r.guests_7||0;r.orders=r.orders_7||0;}
-        if(r.chg_pct===undefined&&r.chg!==undefined)r.chg_pct=r.chg;
-        if(r.chg_abs===undefined)r.chg_abs=r.sales-(r.prev||0);
+      liveData.forEach(function(loc){
+        if(loc.sales===undefined&&loc.sales_7!==undefined){loc.sales=loc.sales_7;loc.prev=loc.prev_7||0;loc.chg_pct=loc.chg||0;loc.chg_abs=loc.sales-(loc.prev||0);loc.guests=loc.guests_7||0;loc.orders=loc.orders_7||0;}
+        if(loc.chg_pct===undefined&&loc.chg!==undefined)loc.chg_pct=loc.chg;
+        if(loc.chg_abs===undefined)loc.chg_abs=loc.sales-(loc.prev||0);
       });
       labelCur='Current period'; labelPrev='Prior period';
     } else {
@@ -415,8 +413,8 @@ async function refresh(){
 
 async function refreshTrend(){
   var url=buildURL('trend')+'&metric='+currentMetric;
-  var r=await fetch(url);
-  var json=await r.json();
+  var tresp=await fetch(url);
+  var json=await tresp.json();
   buildTrendChart(json);
 }
 
@@ -424,7 +422,7 @@ async function refreshTrend(){
 function updateKPIs(rows){
   if(!rows||!rows.length)return;
   var ts=0,tc=0,to_=0,ty=0,tp=0;
-  rows.forEach(function(r){ts+=r.sales;tc+=r.guests;to_+=r.orders;ty+=r.ytd;tp+=r.prev;});
+  rows.forEach(function(row){ts+=row.sales;tc+=row.guests;to_+=row.orders;ty+=row.ytd;tp+=(row.prev||0);});
   var avgChk=to_>0?ts/to_:0;
   var chgPct=tp>0?((ts-tp)/tp*100):0;
   var chgAbs=ts-tp;
@@ -476,7 +474,7 @@ function buildLocChart(rows){
   var labels=rows.map(function(r){return r.location.length>14?r.location.slice(0,13)+'...':r.location;});
   LC=new Chart(document.getElementById('lChart'),{
     type:'bar',
-    data:{labels:labels,datasets:[{data:rows.map(function(r){return r.sales;}),backgroundColor:rows.map(function(r,i){return COLORS[i%COLORS.length];}),borderRadius:4,borderWidth:0}]},
+    data:{labels:labels,datasets:[{data:rows.map(function(row){return row.sales||0;}),backgroundColor:rows.map(function(row,i){return COLORS[i%COLORS.length];}),borderRadius:4,borderWidth:0}]},
     options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
       plugins:{legend:{display:false},tooltip:{backgroundColor:'#fff',borderColor:'#e0e4ea',borderWidth:1,titleColor:'#141f35',bodyColor:'#4a5568',padding:10,callbacks:{label:function(c){return ' '+fmtS(c.raw);}}}},
       scales:{x:{grid:{color:'rgba(0,0,0,.04)'},ticks:{color:'#8a97aa',font:{size:10},callback:function(v){return '$'+Math.round(v/1000)+'k';}},border:{display:false}},y:{grid:{display:false},ticks:{color:'#8a97aa',font:{size:10}},border:{display:false}}}
@@ -486,20 +484,20 @@ function buildLocChart(rows){
 
 // ── TABLE ──
 function buildTable(rows){
-  var maxS=Math.max.apply(null,rows.map(function(r){return r.sales;})||[1]);
-  document.getElementById('tbody').innerHTML=rows.map(function(r){
-    var pct=Math.round(r.sales/maxS*100);
-    var up=r.chg_pct>=0;
-    var varAbs=r.sales-r.prev;
+  var maxS=Math.max.apply(null,rows.map(function(row){return row.sales||0;}).concat([1]));
+  document.getElementById('tbody').innerHTML=rows.map(function(row){
+    var pct=Math.round(row.sales/maxS*100);
+    var up=(row.chg_pct||0)>=0;
+    var varAbs=(row.sales||0)-(row.prev||0);
     return '<tr>'
-      +'<td><div class="lname">'+r.location+'</div></td>'
-      +'<td class="r">'+fmtS(r.sales)+'</td>'
-      +'<td class="r">'+fmtS(r.prev)+'</td>'
+      +'<td><div class="lname">'+row.location+'</div></td>'
+      +'<td class="r">'+fmtS(row.sales||0)+'</td>'
+      +'<td class="r">'+fmtS(row.prev||0)+'</td>'
       +'<td class="r"><span style="color:var(--'+(up?'green':'red')+')">'+(up?'+':'')+fmtS(varAbs)+'</span></td>'
-      +'<td class="r"><span class="badge '+(up?'bup':'bdn')+'">'+(up?'&#8593;':'&#8595;')+' '+Math.abs(r.chg_pct)+'%</span></td>'
-      +'<td class="r">'+(r.guests>0?r.guests.toLocaleString():'&mdash;')+'</td>'
-      +'<td class="r">'+(r.avg_check>0?fmtCheck(r.avg_check):'&mdash;')+'</td>'
-      +'<td class="r">'+fmtS(r.ytd)+'</td>'
+      +'<td class="r"><span class="badge '+(up?'bup':'bdn')+'">'+(up?'&#8593;':'&#8595;')+' '+Math.abs(row.chg_pct||0)+'%</span></td>'
+      +'<td class="r">'+(row.guests>0?row.guests.toLocaleString():'&mdash;')+'</td>'
+      +'<td class="r">'+(row.avg_check>0?fmtCheck(row.avg_check):'&mdash;')+'</td>'
+      +'<td class="r">'+fmtS(row.ytd||0)+'</td>'
       +'<td class="r"><div class="bw"><div class="bf" style="width:'+pct+'%"></div></div></td>'
       +'</tr>';
   }).join('');
