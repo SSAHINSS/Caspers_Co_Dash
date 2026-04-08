@@ -8,10 +8,16 @@ app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 try:
-    from toast_connector import router as toast_router
+    from backend.toast_connector import router as toast_router
     app.include_router(toast_router)
+    print("Toast connector loaded OK")
 except Exception as e:
-    print(f"Toast connector not loaded: {e}")
+    try:
+        from toast_connector import router as toast_router
+        app.include_router(toast_router)
+        print("Toast connector loaded OK (local)")
+    except Exception as e2:
+        print(f"Toast connector not loaded: {e} / {e2}")
 
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
