@@ -7,6 +7,12 @@ from typing import List, Optional
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
+try:
+    from toast_connector import router as toast_router
+    app.include_router(toast_router)
+except Exception as e:
+    print(f"Toast connector not loaded: {e}")
+
 def get_conn():
     return psycopg2.connect(os.environ["DATABASE_URL"])
 
