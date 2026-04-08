@@ -373,36 +373,31 @@ def discover_locations():
     try:
         token = get_token()
         results = {}
-        # Standard API uses /restaurants/v1/restaurants with GET
-        # Try several endpoint patterns
-        endpoints = [
-            "/restaurants/v1/restaurants",
-            "/partners/v1/restaurants",
-        ]
-        for ep in endpoints:
-            resp = requests.get(
-                f"{TOAST_HOST}{ep}",
-                headers={
-                    "Authorization": f"Bearer {token}",
-                    "Toast-Restaurant-External-ID": "0"
-                },
-                timeout=15
-            )
-            results[ep] = {"status": resp.status_code, "body": resp.text[:300]}
-            if resp.ok:
-                data = resp.json()
-                locs = data if isinstance(data, list) else [data]
-                return {
-                    "endpoint_used": ep,
-                    "restaurants": [
-                        {
-                            "guid": r.get("guid", r.get("restaurantGuid","")),
-                            "name": r.get("restaurantName", r.get("name",""))
-                        }
-                        for r in locs
-                    ],
-                    "next_step": "Add TOAST_LOCATION_GUIDS to Railway: GUID1:Oxford Exchange,GUID2:Predalina,...",
-                }
+        # Use partners API to get accessible restaurants
+        partner_guid = "ad917397-3f78-43d4-aa8a-28affbbba15a"
+        resp = requests.get(
+            f"{TOAST_HOST}/partners/v1/restaurants",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Toast-Restaurant-External-ID": partner_guid
+            },
+            timeout=15
+        )
+        results["partners_v1"] = {"status": resp.status_code, "body": resp.text[:500]}
+        if resp.ok:
+            data = resp.json()
+            locs = data if isinstance(data, list) else [data]
+            return {
+                "restaurants": [
+                    {
+                        "guid": r.get("guid", r.get("restaurantGuid","")),
+                        "name": r.get("restaurantName", r.get("name",""))
+                    }
+                    for r in locs
+                ],
+                "next_step": "Add TOAST_LOCATION_GUIDS to Railway variables",
+                "format": "GUID1:Oxford Exchange,GUID2:Predalina,GUID3:The Library,GUID4:Mad Dogs & Englishmen"
+            }
         # If nothing worked, return the token so we know auth is good
         # and show what the token contains
         import base64, json as jsonlib
