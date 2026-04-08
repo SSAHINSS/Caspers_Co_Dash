@@ -6,3 +6,8 @@ startCommand = "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
 healthcheckPath = "/health"
 healthcheckTimeout = 60
 restartPolicyType = "ON_FAILURE"
+
+[[crons]]
+name = "daily-toast-sync"
+schedule = "0 9 * * *"
+command = "curl -s https://casperscodash-production.up.railway.app/sync/toast?days=2"
