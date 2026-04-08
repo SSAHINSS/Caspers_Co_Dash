@@ -367,31 +367,60 @@ def sync_toast(days: int = 3):
 
 @app.get("/toast/locations")
 def discover_locations():
-    """
-    Discover your Toast restaurant GUIDs.
-    Run this once to find the GUIDs, then add them to TOAST_LOCATION_GUIDS.
-    """
+    """Discover Toast restaurant GUIDs for Standard API access."""
     if not CLIENT_ID or not CLIENT_SECRET:
         return {"error": "Toast credentials not set"}
     try:
         token = get_token()
-        # Try management group endpoint
-        resp = requests.get(
-            f"{TOAST_HOST}/restaurants/v1/restaurants",
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=15
-        )
-        if resp.ok:
-            restaurants = resp.json()
-            return {
-                "restaurants": [
-                    {"guid": r.get("guid",""), "name": r.get("restaurantName", r.get("name",""))}
-                    for r in (restaurants if isinstance(restaurants, list) else [restaurants])
-                ],
-                "next_step": "Copy the GUIDs and add TOAST_LOCATION_GUIDS to Railway variables",
-                "format": "GUID1:Oxford Exchange,GUID2:Predalina,GUID3:The Library,GUID4:Mad Dogs & Englishmen"
-            }
-        return {"status": resp.status_code, "body": resp.text[:500]}
+        results = {}
+        # Standard API uses /restaurants/v1/restaurants with GET
+        # Try several endpoint patterns
+        endpoints = [
+            "/restaurants/v1/restaurants",
+            "/partners/v1/restaurants",
+        ]
+        for ep in endpoints:
+            resp = requests.get(
+                f"{TOAST_HOST}{ep}",
+                headers={
+                    "Authorization": f"Bearer {token}",
+                    "Toast-Restaurant-External-ID": "0"
+                },
+                timeout=15
+            )
+            results[ep] = {"status": resp.status_code, "body": resp.text[:300]}
+            if resp.ok:
+                data = resp.json()
+                locs = data if isinstance(data, list) else [data]
+                return {
+                    "endpoint_used": ep,
+                    "restaurants": [
+                        {
+                            "guid": r.get("guid", r.get("restaurantGuid","")),
+                            "name": r.get("restaurantName", r.get("name",""))
+                        }
+                        for r in locs
+                    ],
+                    "next_step": "Add TOAST_LOCATION_GUIDS to Railway: GUID1:Oxford Exchange,GUID2:Predalina,...",
+                }
+        # If nothing worked, return the token so we know auth is good
+        # and show what the token contains
+        import base64, json as jsonlib
+        token_parts = token.split('.')
+        if len(token_parts) >= 2:
+            payload = token_parts[1] + '=='
+            try:
+                decoded = jsonlib.loads(base64.b64decode(payload).decode('utf-8', errors='ignore'))
+            except:
+                decoded = {}
+        else:
+            decoded = {}
+        return {
+            "auth": "SUCCESS - token obtained",
+            "token_claims": decoded,
+            "endpoints_tried": results,
+            "note": "Auth works! Check token_claims for management_set_guid or restaurant GUIDs"
+        }
     except Exception as e:
         return {"error": str(e)}
 
