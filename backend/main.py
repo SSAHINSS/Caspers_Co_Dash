@@ -36,9 +36,13 @@ def compute_ranges(range_name, start_date=None, end_date=None):
         label_cur  = f"Week of {s.strftime('%b %d, %Y')}"
         label_prev = f"Week of {ps.strftime('%b %d, %Y')}"
     elif range_name == "month":
+        import calendar
+        # Current = full current calendar month (even if mid-month)
         s = today.replace(day=1)
-        e = today
-        prev_end   = s - timedelta(days=1)
+        last_day = calendar.monthrange(today.year, today.month)[1]
+        e = min(today, date(today.year, today.month, last_day))
+        # Prior = full prior calendar month
+        prev_end = s - timedelta(days=1)
         prev_start = prev_end.replace(day=1)
         ps = prev_start; pe = prev_end
         label_cur  = today.strftime("%B %Y")
@@ -66,9 +70,22 @@ def sales_summary(
     range: str = "week",
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
+    comp: str = "prior",  # "prior" = prior period, "lly" = last year same period
     locations: Optional[List[str]] = Query(None)
 ):
     s, e, ps, pe, label_cur, label_prev = compute_ranges(range, start_date, end_date)
+
+    # Override prior period to same period last year if requested
+    if comp == "lly":
+        from dateutil.relativedelta import relativedelta
+        try:
+            ps = s.replace(year=s.year - 1)
+            pe = e.replace(year=e.year - 1)
+        except ValueError:
+            ps = s - timedelta(days=365)
+            pe = e - timedelta(days=365)
+        label_prev = label_cur.replace(str(s.year), str(s.year - 1)) + " (LY)"
+
     conn = get_conn(); cur = conn.cursor()
 
     lf = ""; lp = []

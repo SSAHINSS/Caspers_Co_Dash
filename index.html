@@ -199,25 +199,6 @@ tbody tr:hover{background:var(--surf2);}
       </div>
     </div>
 
-    <div class="charts-row">
-      <div class="cc">
-        <div class="spin" id="tSpin">Updating...</div>
-        <div class="cc-hdr">
-          <div><div class="cc-title" id="tTitle">Sales Trend</div><div class="cc-sub" id="tSub">Current vs prior period</div></div>
-          <div class="mtabs">
-            <button class="mtab active" data-m="sales" onclick="setMetric(this)">Sales</button>
-            <button class="mtab" data-m="guests" onclick="setMetric(this)">Covers</button>
-            <button class="mtab" data-m="orders" onclick="setMetric(this)">Orders</button>
-          </div>
-        </div>
-        <div class="cw"><canvas id="tChart"></canvas></div>
-      </div>
-      <div class="cc">
-        <div class="cc-hdr"><div><div class="cc-title">By Location</div><div class="cc-sub" id="locSub">Current period</div></div></div>
-        <div class="cw"><canvas id="lChart"></canvas></div>
-      </div>
-    </div>
-
     <div class="tc">
       <div class="tc-hdr">
         <div>
@@ -225,7 +206,12 @@ tbody tr:hover{background:var(--surf2);}
           <div class="tc-note" id="tableNote">All locations</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
-          <span style="font-size:11px;color:var(--muted)">Metric:</span>
+          <span style="font-size:11px;color:var(--muted)">Compare to:</span>
+          <div class="drng">
+            <button class="dbtn comp-btn active" data-comp="prior" onclick="setCompMode('prior')">Prior Period</button>
+            <button class="dbtn comp-btn" data-comp="lly" onclick="setCompMode('lly')">Same Period LY</button>
+          </div>
+          <span style="font-size:11px;color:var(--muted);margin-left:4px">Metric:</span>
           <div class="drng">
             <button class="dbtn tmet-btn active" data-met="sales" onclick="setTableMetric('sales')">Sales</button>
             <button class="dbtn tmet-btn" data-met="guests" onclick="setTableMetric('guests')">Covers</button>
@@ -233,7 +219,7 @@ tbody tr:hover{background:var(--surf2);}
             <button class="dbtn tmet-btn" data-met="avg" onclick="setTableMetric('avg')">Avg Check</button>
           </div>
           <div class="drng">
-            <button class="dbtn tmode-btn active" data-mode="dollars" onclick="setTableMode('dollars')">$ Variance</button>
+            <button class="dbtn tmode-btn active" data-mode="dollars" onclick="setTableMode('dollars')">$ Var</button>
             <button class="dbtn tmode-btn" data-mode="pct" onclick="setTableMode('pct')">% Only</button>
           </div>
         </div>
@@ -256,6 +242,26 @@ tbody tr:hover{background:var(--surf2);}
       </div>
       <div class="foot-note">* Live data from Railway/PostgreSQL. Remaining locations pending data access.</div>
     </div>
+
+    <div class="charts-row">
+      <div class="cc">
+        <div class="spin" id="tSpin">Updating...</div>
+        <div class="cc-hdr">
+          <div><div class="cc-title" id="tTitle">Sales Trend</div><div class="cc-sub" id="tSub">Current vs prior period</div></div>
+          <div class="mtabs">
+            <button class="mtab active" data-m="sales" onclick="setMetric(this)">Sales</button>
+            <button class="mtab" data-m="guests" onclick="setMetric(this)">Covers</button>
+            <button class="mtab" data-m="orders" onclick="setMetric(this)">Orders</button>
+          </div>
+        </div>
+        <div class="cw"><canvas id="tChart"></canvas></div>
+      </div>
+      <div class="cc">
+        <div class="cc-hdr"><div><div class="cc-title">By Location</div><div class="cc-sub" id="locSub">Current period</div></div></div>
+        <div class="cw"><canvas id="lChart"></canvas></div>
+      </div>
+    </div>
+
 </div>
 </main>
 </main>
@@ -299,6 +305,7 @@ var selectedLocs=[], currentRange='week', currentMetric='sales', activeCard='sal
 var customStart='', customEnd='';
 var TC, LC, liveData=[], labelCur='', labelPrev='';
 var tableMode='dollars'; // 'dollars' or 'pct'
+var compMode='prior'; // 'prior' or 'lly'
 var tableMetric='sales'; // 'sales','guests','orders','avg'
 
 function fmtS(n){return '$'+Math.round(n).toLocaleString();}
@@ -412,8 +419,15 @@ function setTableMetric(met){
 function buildURL(endpoint){
   var url=API+'/sales/'+endpoint+'?range='+currentRange;
   if(currentRange==='custom'&&customStart&&customEnd)url+='&start_date='+customStart+'&end_date='+customEnd;
+  if(endpoint==='summary')url+='&comp='+compMode;
   if(selectedLocs.length)selectedLocs.forEach(function(l){url+='&locations='+encodeURIComponent(l);});
   return url;
+}
+
+function setCompMode(mode){
+  compMode=mode;
+  document.querySelectorAll('.comp-btn').forEach(function(b){b.classList.toggle('active',b.dataset.comp===mode);});
+  refresh();
 }
 
 async function refresh(){
@@ -497,19 +511,40 @@ function buildTrendChart(json){
   var datasets;
   if(locs.length<=1){
     var c=accent();
-    datasets=[{data:data.map(function(r){return r.total||0;}),borderColor:c,backgroundColor:c+'18',fill:true,tension:.4,pointRadius:0,pointHoverRadius:4,borderWidth:2,label:locs[0]||'All'}];
+    datasets=[{data:data.map(function(r){return r.total||0;}),borderColor:c,backgroundColor:c+'18',fill:true,tension:.4,pointRadius:0,pointHoverRadius:6,pointHoverBorderWidth:2,borderWidth:2,label:locs[0]||'All'}];
   } else {
     datasets=locs.map(function(loc,i){
       var c=locColor(loc,i);
-      return {data:data.map(function(r){return r[loc]||0;}),borderColor:c,backgroundColor:'transparent',tension:.4,pointRadius:0,pointHoverRadius:4,borderWidth:2,label:loc};
+      return {data:data.map(function(r){return r[loc]||0;}),borderColor:c,backgroundColor:'transparent',tension:.4,pointRadius:0,pointHoverRadius:6,pointHoverBorderWidth:2,borderWidth:2,label:loc};
     });
   }
   TC=new Chart(document.getElementById('tChart'),{
     type:'line',data:{labels:labels,datasets:datasets},
     options:{responsive:true,maintainAspectRatio:false,
+      interaction:{mode:'index',intersect:false},
       plugins:{legend:{display:locs.length>1,position:'top',labels:{font:{size:11,family:"'DM Sans'"},boxWidth:10,padding:10,usePointStyle:true}},
-        tooltip:{backgroundColor:'#fff',borderColor:'#e0e4ea',borderWidth:1,titleColor:'#141f35',bodyColor:'#4a5568',padding:10,
-          callbacks:{label:function(c){return ' '+c.dataset.label+': '+(isMoney?fmtS(c.raw):c.raw.toLocaleString());}}}},
+        tooltip:{
+          backgroundColor:'#fff',borderColor:'#e0e4ea',borderWidth:1,
+          titleColor:'#141f35',bodyColor:'#4a5568',padding:12,
+          boxWidth:10,boxHeight:10,usePointStyle:true,
+          titleFont:{size:12,weight:'500'},
+          bodyFont:{size:12},
+          callbacks:{
+            title:function(items){return items[0]?items[0].label:'';},
+            label:function(c){
+              var val=isMoney?fmtS(c.raw):c.raw.toLocaleString();
+              return '  '+c.dataset.label+': '+val;
+            },
+            afterBody:function(items){
+              if(items.length>1){
+                var tot=items.reduce(function(s,c){return s+(c.raw||0);},0);
+                return ['','  Total: '+(isMoney?fmtS(tot):tot.toLocaleString())];
+              }
+              return [];
+            }
+          }
+        }
+      },
       scales:{
         x:{grid:{color:'rgba(0,0,0,.04)'},ticks:{color:'#8a97aa',font:{size:10},maxTicksLimit:12},border:{display:false}},
         y:{grid:{color:'rgba(0,0,0,.04)'},ticks:{color:'#8a97aa',font:{size:10},callback:function(v){return isMoney?'$'+Math.round(v/1000)+'k':v.toLocaleString();}},border:{display:false}}
