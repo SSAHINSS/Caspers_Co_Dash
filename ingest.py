@@ -8,8 +8,7 @@ from datetime import datetime
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
     print("ERROR: Set DATABASE_URL environment variable first")
-    print('  Mac/Linux: export DATABASE_URL="postgresql://..."')
-    print('  Windows:   set DATABASE_URL=postgresql://...')
+    print('  Windows: set DATABASE_URL=postgresql://...')
     sys.exit(1)
 
 LOCATIONS = {
@@ -17,12 +16,12 @@ LOCATIONS = {
     "mad_dogs":           "Mad Dogs & Englishmen",
     "predalina":          "Predalina",
     "the_library":        "The Library",
+    "wrights_s_tampa":    "Wright's S. Tampa",
 }
 
 conn = psycopg2.connect(DATABASE_URL)
 cur  = conn.cursor()
 
-# Create table if it doesn't exist
 cur.execute("""
     CREATE TABLE IF NOT EXISTS daily_sales (
         id            SERIAL PRIMARY KEY,
@@ -39,11 +38,9 @@ cur.execute("""
 conn.commit()
 print("Table ready.")
 
-# Load each CSV from the data/ folder
 data_dir = os.path.join(os.path.dirname(__file__), "data")
 if not os.path.exists(data_dir):
-    print(f"ERROR: No 'data/' folder found. Create it and put your CSVs in it.")
-    print("  Expected files: oxford_exchange.csv, mad_dogs.csv, predalina.csv, the_library.csv")
+    print(f"ERROR: No 'data/' folder found.")
     sys.exit(1)
 
 total_rows = 0
