@@ -241,57 +241,70 @@ def get_restaurants(token):
 
 def get_orders_for_day(token, restaurant_guid, business_date):
     """
-    Step 1: Get list of order GUIDs for the business date.
-    Step 2: Fetch each order to get sales details.
-    Returns list of order dicts.
+    Use ordersBulk with 1-hour windows across the business day.
+    Much faster than fetching individual orders.
+    Business hours: 6am - 10pm = 16 hourly calls max.
     """
     import time
-    date_str = business_date.strftime("%Y%m%d")
+    from datetime import datetime, timezone, timedelta
 
-    # Step 1 — get GUIDs
-    try:
-        resp = requests.get(
-            f"{TOAST_HOST}/orders/v2/orders",
-            headers={
-                "Authorization": f"Bearer {token}",
-                "Toast-Restaurant-External-ID": restaurant_guid
-            },
-            params={"businessDate": date_str},
-            timeout=15
-        )
-        if resp.status_code == 204:
-            return []
-        if not resp.ok:
-            return []
-        guids = resp.json()
-        if not isinstance(guids, list):
-            return []
-    except Exception:
-        return []
+    # Build hourly windows for the business day (local = UTC-4 for Tampa)
+    # Use UTC: Tampa is UTC-5 in winter, UTC-4 in summer
+    # Safe range: 10:00 UTC (6am ET) to 02:00 next day UTC (10pm ET)
+    base = datetime(business_date.year, business_date.month, business_date.day,
+                    10, 0, 0, tzinfo=timezone.utc)  # 6am ET
 
-    # Step 2 — fetch each order (batch in groups of 50 to be safe)
-    orders = []
-    for i in range(0, len(guids), 50):
-        batch = guids[i:i+50]
-        for guid in batch:
-            if not isinstance(guid, str):
-                continue
+    all_orders = []
+    seen_guids = set()
+
+    for hour in range(17):  # 6am to 11pm ET = 17 hours
+        window_start = base + timedelta(hours=hour)
+        window_end   = window_start + timedelta(hours=1)
+
+        start_str = window_start.strftime("%Y-%m-%dT%H:%M:%S.000+0000")
+        end_str   = window_end.strftime("%Y-%m-%dT%H:%M:%S.000+0000")
+
+        page = 1
+        while True:
             try:
-                r2 = requests.get(
-                    f"{TOAST_HOST}/orders/v2/orders/{guid}",
+                resp = requests.get(
+                    f"{TOAST_HOST}/orders/v2/ordersBulk",
                     headers={
                         "Authorization": f"Bearer {token}",
                         "Toast-Restaurant-External-ID": restaurant_guid
                     },
-                    timeout=10
+                    params={
+                        "startDate": start_str,
+                        "endDate":   end_str,
+                        "pageSize":  100,
+                        "page":      page
+                    },
+                    timeout=15
                 )
-                if r2.ok:
-                    orders.append(r2.json())
+                if resp.status_code in (204, 404):
+                    break
+                if resp.status_code == 429:
+                    time.sleep(2)
+                    continue
+                if not resp.ok:
+                    break
+                data = resp.json()
+                if not data:
+                    break
+                orders_page = data if isinstance(data, list) else []
+                for o in orders_page:
+                    g = o.get("guid","")
+                    if g and g not in seen_guids:
+                        seen_guids.add(g)
+                        all_orders.append(o)
+                if len(orders_page) < 100:
+                    break
+                page += 1
             except Exception:
-                continue
-            time.sleep(0.05)  # gentle rate limiting
+                break
+        time.sleep(0.1)
 
-    return orders
+    return all_orders
 
 def aggregate_orders(orders):
     """Aggregate raw Toast orders into net_sales, covers, orders."""
