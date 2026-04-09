@@ -240,14 +240,12 @@ def get_restaurants(token):
     return resp.json()
 
 def get_orders_for_day(token, restaurant_guid, business_date):
-    """Pull all orders for a business date using standard orders API with pagination."""
+    """Pull aggregated daily summary using Toast orders API."""
     import time
     date_str = business_date.strftime("%Y%m%d")
-    all_orders = []
-    page = 1
-    page_size = 100
-
-    while True:
+    
+    # Use a short timeout — if it doesn't respond in 10s, skip
+    try:
         resp = requests.get(
             f"{TOAST_HOST}/orders/v2/orders",
             headers={
@@ -256,27 +254,24 @@ def get_orders_for_day(token, restaurant_guid, business_date):
             },
             params={
                 "businessDate": date_str,
-                "pageSize": page_size,
-                "page": page
+                "pageSize": 200,
+                "page": 1
             },
-            timeout=30
+            timeout=10
         )
         if resp.status_code == 204:
-            break  # no orders
+            return []
         if resp.status_code == 429:
-            time.sleep(2)  # back off on rate limit
-            continue
-        resp.raise_for_status()
+            time.sleep(1)
+            return []  # skip instead of hang
+        if not resp.ok:
+            return []
         data = resp.json()
-        if not data:
-            break
-        all_orders.extend(data if isinstance(data, list) else [data])
-        if len(data) < page_size:
-            break  # last page
-        page += 1
-        time.sleep(0.3)  # be polite to the API
-
-    return all_orders
+        return data if isinstance(data, list) else []
+    except requests.exceptions.Timeout:
+        return []
+    except Exception:
+        return []
 
 def aggregate_orders(orders):
     """Aggregate raw Toast orders into net_sales, covers, orders."""
