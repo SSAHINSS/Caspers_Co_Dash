@@ -240,11 +240,15 @@ def get_restaurants(token):
     return resp.json()
 
 def get_orders_for_day(token, restaurant_guid, business_date):
-    """Pull aggregated daily summary using Toast orders API."""
+    """
+    Step 1: Get list of order GUIDs for the business date.
+    Step 2: Fetch each order to get sales details.
+    Returns list of order dicts.
+    """
     import time
     date_str = business_date.strftime("%Y%m%d")
-    
-    # Use a short timeout — if it doesn't respond in 10s, skip
+
+    # Step 1 — get GUIDs
     try:
         resp = requests.get(
             f"{TOAST_HOST}/orders/v2/orders",
@@ -252,26 +256,42 @@ def get_orders_for_day(token, restaurant_guid, business_date):
                 "Authorization": f"Bearer {token}",
                 "Toast-Restaurant-External-ID": restaurant_guid
             },
-            params={
-                "businessDate": date_str,
-                "pageSize": 200,
-                "page": 1
-            },
-            timeout=10
+            params={"businessDate": date_str},
+            timeout=15
         )
         if resp.status_code == 204:
             return []
-        if resp.status_code == 429:
-            time.sleep(1)
-            return []  # skip instead of hang
         if not resp.ok:
             return []
-        data = resp.json()
-        return data if isinstance(data, list) else []
-    except requests.exceptions.Timeout:
-        return []
+        guids = resp.json()
+        if not isinstance(guids, list):
+            return []
     except Exception:
         return []
+
+    # Step 2 — fetch each order (batch in groups of 50 to be safe)
+    orders = []
+    for i in range(0, len(guids), 50):
+        batch = guids[i:i+50]
+        for guid in batch:
+            if not isinstance(guid, str):
+                continue
+            try:
+                r2 = requests.get(
+                    f"{TOAST_HOST}/orders/v2/orders/{guid}",
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Toast-Restaurant-External-ID": restaurant_guid
+                    },
+                    timeout=10
+                )
+                if r2.ok:
+                    orders.append(r2.json())
+            except Exception:
+                continue
+            time.sleep(0.05)  # gentle rate limiting
+
+    return orders
 
 def aggregate_orders(orders):
     """Aggregate raw Toast orders into net_sales, covers, orders."""
