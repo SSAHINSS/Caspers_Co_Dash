@@ -445,3 +445,58 @@ def toast_debug():
         "secret_repr_first10": repr(sec[:10])
     }
 
+@app.get("/toast/test-orders")
+def test_orders():
+    """Test what the orders endpoint actually returns."""
+    if not CLIENT_ID or not CLIENT_SECRET:
+        return {"error": "No credentials"}
+    try:
+        token = get_token()
+        locations_to_sync = os.environ.get("TOAST_LOCATION_GUIDS", "")
+        loc_pairs = []
+        for pair in locations_to_sync.split(","):
+            pair = pair.strip()
+            if ":" in pair:
+                guid, name = pair.split(":", 1)
+                loc_pairs.append((guid.strip(), name.strip()))
+        
+        if not loc_pairs:
+            return {"error": "No locations configured"}
+        
+        guid, name = loc_pairs[0]
+        results = {}
+        
+        # Try different endpoint variants
+        from datetime import date, timedelta
+        yesterday = date.today() - timedelta(days=1)
+        date_str = yesterday.strftime("%Y%m%d")
+        
+        variants = [
+            ("orders_v2_businessDate", f"{TOAST_HOST}/orders/v2/orders", {"businessDate": date_str}),
+            ("orders_v2_dates", f"{TOAST_HOST}/orders/v2/orders", {
+                "startDate": yesterday.strftime("%Y-%m-%dT00:00:00.000+0000"),
+                "endDate": yesterday.strftime("%Y-%m-%dT23:59:59.000+0000")
+            }),
+        ]
+        
+        for label, url, params in variants:
+            try:
+                resp = requests.get(
+                    url,
+                    headers={
+                        "Authorization": f"Bearer {token}",
+                        "Toast-Restaurant-External-ID": guid
+                    },
+                    params=params,
+                    timeout=10
+                )
+                results[label] = {
+                    "status": resp.status_code,
+                    "body": resp.text[:400]
+                }
+            except Exception as e:
+                results[label] = {"error": str(e)}
+        
+        return {"location": name, "guid": guid, "date_tested": str(yesterday), "results": results}
+    except Exception as e:
+        return {"error": str(e)}
