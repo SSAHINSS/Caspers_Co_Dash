@@ -28,17 +28,16 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);color:var(--txt)
 .sidebar.collapsed{transform:translateX(-220px);}
 .sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99;opacity:0;transition:opacity .28s;}
 .sb-overlay.on{display:block;opacity:1;}
-.sb-toggle{position:fixed;top:15px;left:15px;z-index:101;width:34px;height:34px;border-radius:7px;background:var(--sidebar-bg);border:none;cursor:pointer;display:none;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:8px;transition:background var(--spd);box-shadow:0 2px 8px rgba(0,0,0,.25);}
-.sidebar.collapsed .sb-toggle-inline{opacity:1;}
-.sb-toggle span{display:block;width:18px;height:2px;background:#fff;border-radius:2px;transition:all .2s;}
-/* Desktop: only show floating toggle when sidebar is collapsed */
-body.sb-closed .sb-toggle{display:flex;}
-/* Mobile: always show floating toggle */
-@media(max-width:768px){.sb-toggle{display:flex!important;}}
+.sb-toggle{display:none;}
 /* Inline toggle inside sidebar brand area */
 .sb-toggle-inline{background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:6px;border-radius:6px;opacity:0.6;transition:opacity .15s;margin-left:auto;flex-shrink:0;}
-.sb-toggle-inline:hover{opacity:1;}
+.sb-toggle-inline:hover{opacity:1;background:rgba(255,255,255,.08);}
 .sb-toggle-inline span{display:block;width:16px;height:2px;background:#fff;border-radius:2px;}
+/* Topbar hamburger — shown on desktop when collapsed, always on mobile */
+.tb-toggle{width:34px;height:34px;border-radius:7px;background:var(--surf2);border:1px solid var(--bdr);cursor:pointer;display:none;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:8px;flex-shrink:0;transition:background .15s;}
+.tb-toggle:hover{background:var(--accent-dim);}
+.tb-toggle span{display:block;width:16px;height:2px;background:var(--txt);border-radius:2px;}
+body.sb-closed .tb-toggle{display:flex;}
 .sb-brand{padding:18px 14px 14px;border-bottom:1px solid var(--sbar);display:flex;align-items:center;gap:10px;}
 .sb-mark{width:30px;height:30px;flex-shrink:0;object-fit:contain;filter:brightness(4);}
 .sb-name{font-family:'Playfair Display',serif;font-size:14px;font-weight:600;color:#fff;letter-spacing:.05em;text-transform:uppercase;line-height:1.2;}
@@ -131,9 +130,9 @@ tbody tr:hover{background:var(--surf2);}
   .main{margin-left:0!important;}
   .kpi-grid{grid-template-columns:repeat(2,1fr);}
   .charts-row{grid-template-columns:1fr;}
-  .topbar{padding:0 14px 0 58px;}
   .drng .dbtn{padding:5px 7px;font-size:10px;}
   .sb-toggle-inline{display:none;}
+  .tb-toggle{display:flex!important;}
 }
 </style>
 </head>
@@ -178,6 +177,7 @@ tbody tr:hover{background:var(--surf2);}
 
 <main class="main">
   <div class="topbar">
+    <button class="tb-toggle" id="tbToggle" onclick="toggleSidebar()" aria-label="Open menu" style="margin-right:12px;"><span></span><span></span><span></span></button>
     <div class="logo-wrap"><img class="top-logo" id="topLogo" src="" alt=""/></div>
     <div class="divider"></div>
     <div class="tb-ctx">
@@ -709,12 +709,10 @@ function toggleSidebar(){
   } else {
     var isCollapsed=document.body.classList.contains('sb-closed');
     if(isCollapsed){
-      // open it
       sb.classList.remove('collapsed');
       document.body.classList.remove('sb-closed');
       document.querySelector('.main').style.marginLeft='220px';
     } else {
-      // close it
       sb.classList.add('collapsed');
       document.body.classList.add('sb-closed');
       document.querySelector('.main').style.marginLeft='0';
