@@ -24,7 +24,13 @@
 [data-theme="ox-design"]{--accent:#6b7245;--accent-dim:rgba(107,114,69,.11);--accent-border:rgba(107,114,69,.28);--sidebar-bg:#252a1c;}
 *{margin:0;padding:0;box-sizing:border-box;}
 body{font-family:'DM Sans',sans-serif;background:var(--page-bg);color:var(--txt);min-height:100vh;display:flex;}
-.sidebar{width:220px;min-height:100vh;background:var(--sidebar-bg);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;transition:background var(--spd);}
+.sidebar{width:220px;min-height:100vh;background:var(--sidebar-bg);display:flex;flex-direction:column;position:fixed;top:0;left:0;bottom:0;z-index:100;transition:background var(--spd),transform .28s cubic-bezier(.4,0,.2,1);}
+.sidebar.collapsed{transform:translateX(-220px);}
+.sb-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:99;opacity:0;transition:opacity .28s;}
+.sb-overlay.on{display:block;opacity:1;}
+.sb-toggle{position:fixed;top:14px;left:14px;z-index:101;width:36px;height:36px;border-radius:8px;background:var(--sidebar-bg);border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;padding:8px;transition:background var(--spd),left .28s cubic-bezier(.4,0,.2,1);box-shadow:0 2px 8px rgba(0,0,0,.25);}
+.sb-toggle.open{left:232px;}
+.sb-toggle span{display:block;width:18px;height:2px;background:#fff;border-radius:2px;transition:all .2s;}
 .sb-brand{padding:18px 14px 14px;border-bottom:1px solid var(--sbar);display:flex;align-items:center;gap:10px;}
 .sb-mark{width:30px;height:30px;flex-shrink:0;object-fit:contain;filter:brightness(4);}
 .sb-name{font-family:'Playfair Display',serif;font-size:14px;font-weight:600;color:#fff;letter-spacing:.05em;text-transform:uppercase;line-height:1.2;}
@@ -44,7 +50,9 @@ body{font-family:'DM Sans',sans-serif;background:var(--page-bg);color:var(--txt)
 .live-badge{display:inline-flex;align-items:center;gap:5px;color:var(--green);font-weight:500;margin-bottom:3px;font-size:10px;}
 .live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:pulse 2s infinite;}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.main{margin-left:220px;flex:1;display:flex;flex-direction:column;min-height:100vh;}
+.main{margin-left:220px;flex:1;display:flex;flex-direction:column;min-height:100vh;transition:margin-left .28s cubic-bezier(.4,0,.2,1);}
+.sidebar.collapsed~.main,.sidebar.collapsed~* .main{margin-left:0;}
+body.sb-closed .main{margin-left:0;}
 .topbar{background:var(--surf);border-bottom:1px solid var(--bdr);display:flex;align-items:center;padding:0 26px;height:66px;position:sticky;top:0;z-index:50;box-shadow:0 1px 4px rgba(0,0,0,.04);}
 .logo-wrap{height:48px;display:flex;align-items:center;flex-shrink:0;min-width:80px;}
 .top-logo{max-height:48px;max-width:220px;width:auto;display:block;object-fit:contain;}
@@ -109,11 +117,26 @@ tbody tr:hover{background:var(--surf2);}
 .bw{width:56px;height:4px;background:rgba(0,0,0,.07);border-radius:3px;overflow:hidden;display:inline-block;vertical-align:middle;}
 .bf{height:100%;background:var(--accent);border-radius:3px;transition:background var(--spd);}
 .foot-note{font-size:11px;color:var(--muted);padding:9px 20px;border-top:1px solid var(--bdr);background:var(--surf2);}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-220px);}
+  .sidebar.open{transform:translateX(0);}
+  .main{margin-left:0!important;}
+  .sb-toggle{left:14px!important;}
+  .sb-toggle.open{left:232px!important;}
+  .kpi-grid{grid-template-columns:repeat(2,1fr);}
+  .charts-row{grid-template-columns:1fr;}
+  .topbar{padding:0 14px 0 60px;}
+  .drng .dbtn{padding:5px 7px;font-size:10px;}
+}
 </style>
 </head>
 <body id="app">
 
-<aside class="sidebar">
+<div class="sb-overlay" id="sbOverlay" onclick="toggleSidebar()"></div>
+<button class="sb-toggle open" id="sbToggle" onclick="toggleSidebar()" aria-label="Toggle menu">
+  <span></span><span></span><span></span>
+</button>
+<aside class="sidebar" id="sidebar">
   <div class="sb-brand">
     <img class="sb-mark" id="sbMark" src="" alt=""/>
     <div><div class="sb-name">Caspers Co.</div><div class="sb-sub">Operations Dashboard</div></div>
@@ -663,6 +686,42 @@ function applyCustom(){
   customEnd=document.getElementById('dateTo').value;
   if(customStart&&customEnd)refresh();
 }
+
+// ── SIDEBAR TOGGLE ──
+function toggleSidebar(){
+  var sb=document.getElementById('sidebar');
+  var toggle=document.getElementById('sbToggle');
+  var overlay=document.getElementById('sbOverlay');
+  var isMobile=window.innerWidth<=768;
+  if(isMobile){
+    var isOpen=sb.classList.contains('open');
+    sb.classList.toggle('open',!isOpen);
+    toggle.classList.toggle('open',!isOpen);
+    overlay.classList.toggle('on',!isOpen);
+  } else {
+    var isCollapsed=sb.classList.contains('collapsed');
+    sb.classList.toggle('collapsed',!isCollapsed);
+    toggle.classList.toggle('open',isCollapsed);
+    // shift main content
+    document.querySelector('.main').style.marginLeft=isCollapsed?'220px':'0';
+  }
+}
+// Close sidebar on mobile when nav item clicked
+document.addEventListener('DOMContentLoaded',function(){
+  document.querySelectorAll('.nav-item').forEach(function(n){
+    n.addEventListener('click',function(){
+      if(window.innerWidth<=768){
+        document.getElementById('sidebar').classList.remove('open');
+        document.getElementById('sbToggle').classList.remove('open');
+        document.getElementById('sbOverlay').classList.remove('on');
+      }
+    });
+  });
+  // On mobile, start collapsed
+  if(window.innerWidth<=768){
+    document.getElementById('sbToggle').classList.remove('open');
+  }
+});
 
 // ── INIT ──
 setLogo('CASPERS');
