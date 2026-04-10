@@ -248,16 +248,15 @@ def get_orders_for_day(token, restaurant_guid, business_date):
     import time
     from datetime import datetime, timezone, timedelta
 
-    # Build hourly windows for the business day (local = UTC-4 for Tampa)
-    # Use UTC: Tampa is UTC-5 in winter, UTC-4 in summer
-    # Safe range: 10:00 UTC (6am ET) to 02:00 next day UTC (10pm ET)
+    # Build hourly windows covering the full 24-hour business day UTC
+    # Start at midnight UTC-4 (4:00 UTC) = midnight ET, cover full day
     base = datetime(business_date.year, business_date.month, business_date.day,
-                    10, 0, 0, tzinfo=timezone.utc)  # 6am ET
+                    4, 0, 0, tzinfo=timezone.utc)  # midnight ET (UTC-4)
 
     all_orders = []
     seen_guids = set()
 
-    for hour in range(17):  # 6am to 11pm ET = 17 hours
+    for hour in range(24):  # full 24 hours
         window_start = base + timedelta(hours=hour)
         window_end   = window_start + timedelta(hours=1)
 
@@ -308,23 +307,22 @@ def get_orders_for_day(token, restaurant_guid, business_date):
 
 def aggregate_orders(orders):
     """Aggregate raw Toast orders into net_sales, covers, orders."""
-    net_sales   = 0.0
+    net_sales    = 0.0
     total_orders = 0
     total_guests = 0
 
     for order in orders:
-        # Skip voided orders
-        if order.get("voidDate") or order.get("voided"):
+        if order.get("voidDate") or order.get("voided") or order.get("deleted"):
             continue
-        # Skip open/unpaid tabs
         if order.get("paidDate") is None:
             continue
 
-        checks = order.get("checks", [])
+        checks = order.get("checks") or []
         for check in checks:
-            # Net sales = totalAmount - tax - void amounts
-            net_sales += float(check.get("totalAmount", 0) or 0)
-            net_sales -= float(check.get("taxAmount",   0) or 0)
+            # totalAmount - taxAmount = net sales (pre-tax)
+            total  = float(check.get("totalAmount", 0) or 0)
+            tax    = float(check.get("taxAmount",   0) or 0)
+            net_sales += (total - tax)
 
         total_orders += 1
         total_guests += int(order.get("numberOfGuests", 0) or 0)
