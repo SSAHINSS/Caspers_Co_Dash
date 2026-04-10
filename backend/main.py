@@ -533,3 +533,75 @@ def test_orders():
         return {"location": name, "guid": guid, "date_tested": str(yesterday), "results": results}
     except Exception as e:
         return {"error": str(e)}
+
+@app.get("/toast/test-bulk")
+def test_bulk():
+    """Fetch one hour of orders and show raw structure of first order."""
+    if not CLIENT_ID or not CLIENT_SECRET:
+        return {"error": "No credentials"}
+    try:
+        token = get_token()
+        locations_to_sync = os.environ.get("TOAST_LOCATION_GUIDS", "")
+        loc_pairs = []
+        for pair in locations_to_sync.split(","):
+            pair = pair.strip()
+            if ":" in pair:
+                guid, name = pair.split(":", 1)
+                loc_pairs.append((guid.strip(), name.strip()))
+        if not loc_pairs:
+            return {"error": "No locations"}
+
+        guid, name = loc_pairs[0]
+        # Try one hour yesterday lunchtime
+        from datetime import date, timedelta, datetime, timezone
+        yesterday = date.today() - timedelta(days=1)
+        start = datetime(yesterday.year, yesterday.month, yesterday.day, 17, 0, 0, tzinfo=timezone.utc)
+        end = datetime(yesterday.year, yesterday.month, yesterday.day, 18, 0, 0, tzinfo=timezone.utc)
+
+        resp = requests.get(
+            f"{TOAST_HOST}/orders/v2/ordersBulk",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "Toast-Restaurant-External-ID": guid
+            },
+            params={
+                "startDate": start.strftime("%Y-%m-%dT%H:%M:%S.000+0000"),
+                "endDate":   end.strftime("%Y-%m-%dT%H:%M:%S.000+0000"),
+                "pageSize":  5,
+                "page":      1
+            },
+            timeout=15
+        )
+        if not resp.ok:
+            return {"status": resp.status_code, "body": resp.text[:500]}
+
+        orders = resp.json()
+        if not orders:
+            return {"message": "No orders in this window", "window": str(start)}
+
+        # Show structure of first order
+        first = orders[0] if isinstance(orders, list) else orders
+        return {
+            "order_count_in_window": len(orders) if isinstance(orders, list) else 1,
+            "first_order_keys": list(first.keys()) if isinstance(first, dict) else str(type(first)),
+            "first_order_sample": {
+                "guid": first.get("guid"),
+                "paidDate": first.get("paidDate"),
+                "voidDate": first.get("voidDate"),
+                "numberOfGuests": first.get("numberOfGuests"),
+                "checks": [
+                    {
+                        "guid": c.get("guid"),
+                        "totalAmount": c.get("totalAmount"),
+                        "taxAmount": c.get("taxAmount"),
+                        "amount": c.get("amount"),
+                        "netAmounts": c.get("netAmounts"),
+                        "payments": [{"amount": p.get("amount"), "type": p.get("type")} 
+                                    for p in (c.get("payments") or [])[:2]]
+                    }
+                    for c in (first.get("checks") or [])[:2]
+                ]
+            }
+        }
+    except Exception as e:
+        return {"error": str(e)}
