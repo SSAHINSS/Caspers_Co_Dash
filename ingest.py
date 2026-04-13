@@ -1,15 +1,16 @@
 """
-Run this locally to load Toast CSV data into Railway Postgres.
-Usage: python ingest.py
+Caspers Company — CSV to PostgreSQL ingestion script
+Loads all CSV files in the data/ folder into the daily_sales table.
 """
-import psycopg2, csv, os, sys
+import os, csv, psycopg2
 from datetime import datetime
+from collections import defaultdict
 
 DATABASE_URL = os.environ.get("DATABASE_URL")
 if not DATABASE_URL:
-    print("ERROR: Set DATABASE_URL environment variable first")
-    print('  Windows: set DATABASE_URL=postgresql://...')
-    sys.exit(1)
+    raise ValueError("Set DATABASE_URL environment variable first.")
+
+DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
 
 LOCATIONS = {
     "oxford_exchange":    "Oxford Exchange",
@@ -19,66 +20,99 @@ LOCATIONS = {
     "wrights_s_tampa":    "Wright's S. Tampa",
 }
 
+def safe_float(val, default=0.0):
+    try:
+        v = str(val).strip()
+        return float(v) if v else default
+    except:
+        return default
+
+def safe_int(val, default=0):
+    try:
+        v = str(val).strip()
+        return int(float(v)) if v else default
+    except:
+        return default
+
 conn = psycopg2.connect(DATABASE_URL)
-cur  = conn.cursor()
+cur = conn.cursor()
 
 cur.execute("""
     CREATE TABLE IF NOT EXISTS daily_sales (
-        id            SERIAL PRIMARY KEY,
-        location      TEXT NOT NULL,
-        business_date DATE NOT NULL,
-        net_sales     NUMERIC(12,2),
+        location      TEXT,
+        business_date DATE,
+        net_sales     NUMERIC,
         total_orders  INTEGER,
         total_guests  INTEGER,
-        source        TEXT DEFAULT 'toast_csv',
-        loaded_at     TIMESTAMPTZ DEFAULT now(),
-        UNIQUE(location, business_date)
-    );
+        source        TEXT DEFAULT 'csv',
+        loaded_at     TIMESTAMP DEFAULT NOW(),
+        PRIMARY KEY (location, business_date)
+    )
 """)
 conn.commit()
 print("Table ready.")
 
-data_dir = os.path.join(os.path.dirname(__file__), "data")
-if not os.path.exists(data_dir):
-    print(f"ERROR: No 'data/' folder found.")
-    sys.exit(1)
-
-total_rows = 0
-for key, location_name in LOCATIONS.items():
-    filepath = os.path.join(data_dir, f"{key}.csv")
-    if not os.path.exists(filepath):
-        print(f"  SKIP: {filepath} not found")
+for fname, location_name in LOCATIONS.items():
+    fpath = os.path.join(DATA_DIR, fname + ".csv")
+    if not os.path.exists(fpath):
+        print(f"  SKIP {fname}.csv - file not found")
         continue
 
-    with open(filepath) as f:
-        reader = csv.DictReader(f)
-        rows_loaded = 0
-        for row in reader:
-            date_str   = row.get("yyyyMMdd", "").strip()
-            net_sales  = row.get("Net sales", "0").strip()
-            orders     = row.get("Total orders", "0").strip()
-            guests     = row.get("Total guests", "0").strip()
+    print(f"\nLoading {fname}.csv -> {location_name}...")
 
-            if not date_str or date_str == "yyyyMMdd":
+    daily = defaultdict(lambda: {"sales": 0.0, "orders": set(), "guests": 0})
+
+    with open(fpath, encoding="latin-1") as f:
+        reader = csv.reader(f, delimiter="|")
+        next(reader)
+        row_count = 0
+        for row in reader:
+            try:
+                if len(row) < 20: continue
+                status = row[16].strip() if len(row) > 16 else ""
+                if status == "D": continue
+
+                date_str = row[15].strip() if len(row) > 15 else ""
+                if not date_str: continue
+
+                dt = datetime.strptime(date_str, "%m/%d/%y").date()
+                ticket = row[2].strip() if len(row) > 2 else ""
+                sub = safe_float(row[13]) if len(row) > 13 else 0.0
+                disc = safe_float(row[21]) if len(row) > 21 else 0.0
+                guests = safe_int(row[3]) if len(row) > 3 else 0
+                net = sub - disc
+
+                daily[dt]["sales"] += net
+                if ticket:
+                    daily[dt]["orders"].add(ticket)
+                if guests > 0:
+                    daily[dt]["guests"] += guests
+                row_count += 1
+            except Exception as e:
                 continue
 
-            business_date = datetime.strptime(date_str, "%Y%m%d").date()
+    print(f"  Parsed {row_count:,} rows -> {len(daily)} days")
 
-            cur.execute("""
-                INSERT INTO daily_sales (location, business_date, net_sales, total_orders, total_guests)
-                VALUES (%s, %s, %s, %s, %s)
-                ON CONFLICT (location, business_date) DO UPDATE SET
-                    net_sales     = EXCLUDED.net_sales,
-                    total_orders  = EXCLUDED.total_orders,
-                    total_guests  = EXCLUDED.total_guests,
-                    loaded_at     = now()
-            """, (location_name, business_date, float(net_sales), int(orders), int(guests)))
-            rows_loaded += 1
+    upserted = 0
+    for business_date, data in sorted(daily.items()):
+        net_sales = round(data["sales"], 2)
+        orders = len(data["orders"])
+        guests = data["guests"]
+        cur.execute("""
+            INSERT INTO daily_sales (location, business_date, net_sales, total_orders, total_guests, source)
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (location, business_date) DO UPDATE SET
+                net_sales    = EXCLUDED.net_sales,
+                total_orders = EXCLUDED.total_orders,
+                total_guests = EXCLUDED.total_guests,
+                source       = EXCLUDED.source,
+                loaded_at    = NOW()
+        """, (location_name, business_date, net_sales, orders, guests, "csv"))
+        upserted += 1
 
     conn.commit()
-    print(f"  {location_name}: {rows_loaded} days loaded")
-    total_rows += rows_loaded
+    print(f"  Upserted {upserted} days into PostgreSQL")
 
 cur.close()
 conn.close()
-print(f"\nDone. {total_rows} total rows upserted.")
+print("\nAll done!")
